@@ -1,1 +1,455 @@
-
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Распознавание объектов - Ваша YOLO модель</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .upload-area {
+            padding: 40px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .upload-box {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+        
+        .upload-box:hover {
+            background: #f0f0f0;
+            border-color: #764ba2;
+        }
+        
+        .upload-box input {
+            display: none;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .file-info {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .result-area {
+            padding: 40px;
+            display: none;
+        }
+        
+        .result-content {
+            text-align: center;
+        }
+        
+        .result-media {
+            max-width: 100%;
+            max-height: 70vh;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        
+        .detections {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .detection-item {
+            background: white;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+            text-align: left;
+        }
+        
+        .stats {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: scale(1.05);
+        }
+        
+        .video-controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .video-controls button {
+            margin-top: 0;
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+        
+        /* Стили для ошибок */
+        .error-message {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+            text-align: center;
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        
+        .error-message h3 {
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .error-message p {
+            margin-bottom: 15px;
+            font-size: 0.95em;
+            opacity: 0.95;
+        }
+        
+        .error-message button {
+            background: white;
+            color: #e53e3e;
+            margin-top: 5px;
+        }
+        
+        .error-message button:hover {
+            transform: scale(1.05);
+            background: #f0f0f0;
+        }
+        
+        .model-error {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .upload-area, .result-area {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Распознавание деятельности сотрудников в офисе</h1>
+            <p>Загрузите фото или видео для детекции и классификации деятельности</p>
+        </div>
+        
+        <div class="upload-area">
+            <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📁</div>
+                <h3>Нажмите для выбора файла</h3>
+                <p>Поддерживаются: JPG, PNG, BMP, MP4, AVI, MOV, MKV</p>
+                <p style="font-size: 12px; margin-top: 10px;">Максимальный размер: 500MB</p>
+                <input type="file" id="fileInput" accept="image/*,video/mp4,video/avi,video/quicktime,video/x-matroska">
+            </div>
+            <div id="fileInfo" class="file-info"></div>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Обработка файла... Пожалуйста, подождите</p>
+            <p style="font-size: 12px; margin-top: 10px;">Для видео это может занять несколько минут</p>
+        </div>
+        
+        <!-- Контейнер для ошибок -->
+        <div id="errorContainer"></div>
+        
+        <div id="resultArea" class="result-area">
+            <div class="result-content">
+                <div id="stats" class="stats"></div>
+                <div id="resultMedia"></div>
+                <div id="detectionsList" class="detections"></div>
+                <button onclick="resetApp()">Распознать другой файл</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const loading = document.getElementById('loading');
+        const resultArea = document.getElementById('resultArea');
+        const stats = document.getElementById('stats');
+        const resultMedia = document.getElementById('resultMedia');
+        const detectionsList = document.getElementById('detectionsList');
+        const errorContainer = document.getElementById('errorContainer');
+        
+        // Функция для отображения ошибки на странице
+        function showError(message, isModelError = false) {
+            // Очищаем предыдущие ошибки
+            errorContainer.innerHTML = '';
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = `error-message ${isModelError ? 'model-error' : ''}`;
+            errorDiv.innerHTML = `
+                <h3>⚠️ Ошибка</h3>
+                <p>${message}</p>
+                <button onclick="resetError()">Понятно</button>
+            `;
+            errorContainer.appendChild(errorDiv);
+            
+            // Скрываем другие элементы
+            loading.style.display = 'none';
+            resultArea.style.display = 'none';
+            fileInfo.style.display = 'none';
+        }
+        
+        function resetError() {
+            errorContainer.innerHTML = '';
+            fileInput.value = '';
+        }
+        
+        function resetApp() {
+            resultArea.style.display = 'none';
+            fileInfo.style.display = 'none';
+            fileInput.value = '';
+            resultMedia.innerHTML = '';
+            detectionsList.innerHTML = '';
+            stats.innerHTML = '';
+            errorContainer.innerHTML = '';
+        }
+        
+        // Проверка модели при загрузке страницы
+        async function checkModel() {
+            try {
+                const response = await fetch('/check_model');
+                const data = await response.json();
+                if (data.error) {
+                    showError(data.error, true);
+                    // Блокируем загрузку файлов
+                    fileInput.disabled = true;
+                    document.querySelector('.upload-box').style.opacity = '0.5';
+                    document.querySelector('.upload-box').style.cursor = 'not-allowed';
+                } else {
+                    console.log('Модель загружена:', data);
+                    fileInput.disabled = false;
+                }
+            } catch (error) {
+                console.error('Ошибка проверки модели:', error);
+                showError('Не удалось подключиться к серверу. Убедитесь, что сервер запущен.', true);
+                fileInput.disabled = true;
+                document.querySelector('.upload-box').style.opacity = '0.5';
+                document.querySelector('.upload-box').style.cursor = 'not-allowed';
+            }
+        }
+        
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Очищаем предыдущие ошибки
+            errorContainer.innerHTML = '';
+            
+            // Проверка размера файла (500MB)
+            if (file.size > 500 * 1024 * 1024) {
+                showError('Файл слишком большой! Максимальный размер 500MB');
+                return;
+            }
+            
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `
+                <strong>Файл:</strong> ${file.name}<br>
+                <strong>Размер:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                <strong>Тип:</strong> ${file.type || 'видео/изображение'}
+            `;
+            
+            uploadFile(file);
+        });
+        
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            loading.style.display = 'block';
+            resultArea.style.display = 'none';
+            errorContainer.innerHTML = '';
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loading.style.display = 'none';
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                resultArea.style.display = 'block';
+                
+                if (data.type === 'image') {
+                    stats.innerHTML = `Найдено объектов: ${data.count}`;
+                    
+                    resultMedia.innerHTML = `
+                        <img src="${data.result_url}?t=${Date.now()}" class="result-media" alt="Результат распознавания">
+                    `;
+                    
+                    if (data.detections && data.detections.length > 0) {
+                        let html = '<h3>Найденные объекты:</h3>';
+                        data.detections.forEach((det, index) => {
+                            html += `
+                                <div class="detection-item">
+                                    <strong>${det.class}</strong><br>
+                                    Уверенность: ${(det.confidence * 100).toFixed(2)}%
+                                </div>
+                            `;
+                        });
+                        detectionsList.innerHTML = html;
+                    } else {
+                        detectionsList.innerHTML = '<p>Объекты не обнаружены</p>';
+                    }
+                } 
+                else if (data.type === 'video') {
+                    stats.innerHTML = `Видео успешно обработано!`;
+                    
+                    // Добавляем уникальный параметр для избежания кэширования
+                    const videoUrl = `${data.result_url}?t=${Date.now()}`;
+                    
+                    resultMedia.innerHTML = `
+                        <video id="resultVideo" controls class="result-media" style="width: 100%;">
+                            <source src="${videoUrl}" type="video/mp4">
+                            <source src="${videoUrl}" type="video/webm">
+                            <p>Ваш браузер не поддерживает видео. 
+                            <a href="${videoUrl}" download>Скачать видео</a></p>
+                        </video>
+                        <div class="video-controls">
+                            <button onclick="document.getElementById('resultVideo').play()">▶ Воспроизвести</button>
+                            <button onclick="document.getElementById('resultVideo').pause()">⏸ Пауза</button>
+                            <button onclick="downloadVideo('${videoUrl}')">📥 Скачать видео</button>
+                        </div>
+                    `;
+                    detectionsList.innerHTML = '<p>Результаты детекции показаны в видео. <br>Объекты выделены рамками с подписями.</p>';
+                }
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                showError('Ошибка при загрузке файла: ' + error.message);
+                console.error('Error:', error);
+            });
+        }
+        
+        function downloadVideo(url) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'detected_video.mp4';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+        
+        // Функция для проверки поддержки видео в браузере
+        function checkVideoSupport() {
+            const video = document.createElement('video');
+            const supported = {
+                mp4: video.canPlayType('video/mp4'),
+                webm: video.canPlayType('video/webm'),
+                ogg: video.canPlayType('video/ogg')
+            };
+            console.log('Поддержка видео форматов:', supported);
+        }
+        
+        checkVideoSupport();
+        
+        // Проверяем модель при загрузке страницы
+        checkModel();
+    </script>
+</body>
+</html>
